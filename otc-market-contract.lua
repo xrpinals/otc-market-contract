@@ -1,10 +1,11 @@
 -- N stands for Normal (Market State)
 -- C stands for Closed (Market State)
+
 type MarketState = 'N' | 'C'
 
 type Storage = {
-    base: string,
-    quote: string, 
+    base_symbol: string,
+    quote_symbol: string, 
     state: string,
     owner: string,
     fee_rate: int,
@@ -16,8 +17,8 @@ var M = Contract<Storage>()
 
 
 function M:init()   
-    self.base_symbol = "XPS"
-    self.quote_symbol = "BTC"
+    self.storage.base_symbol = "XPS"
+    self.storage.quote_symbol = "BTC"
     self.storage.state = 'N'
     self.storage.owner = caller_address
     self.storage.fee_rate = 0
@@ -85,9 +86,9 @@ offline function M:sell_orders(_: string)
         return error("Params Error: invalid params")
     end
 
-    from_idx = tointeger(param[1])
-    page_count = tointeger(param[2])
-    end_idx = from_idx + page_count
+    let from_idx = tointeger(params[1])
+    let page_count = tointeger(params[2])
+    var end_idx = from_idx + page_count
 
     if end_idx >= #self.storage.orders_indexes then
         end_idx = #self.storage.orders_indexes
@@ -96,7 +97,7 @@ offline function M:sell_orders(_: string)
     let orders: Array<string> = []
     for i = from_idx, end_idx do
         let order_idx = self.storage.orders_indexes[i]
-        let r = fast_map_get(sell_orders, order_idx)
+        let r = fast_map_get("sell_orders", order_idx)
         orders[#orders + 1] = r
     end
 
@@ -133,7 +134,7 @@ function M:on_deposit_asset(json_str: string)
     end
 
     if (#params ~= 3) then
-        if (params[1] ~= "SELL" then
+        if (params[1] ~= "SELL") then
             return error("Params Error: invalid params")
         end
 
@@ -155,25 +156,25 @@ function M:on_deposit_asset(json_str: string)
         var sell_order = {}
         sell_order["seller"] = caller_address
         sell_order["sell_symbol"] = sell_symbol
-        sell_order["sell_amount"] = to_string(sell_amount)
+        sell_order["sell_amount"] = tostring(sell_amount)
         sell_order["buy_symbol"] = buy_symbol
-        sell_order["buy_amount"] = to_string(buy_amount)
-        sell_order["order_index"] = to_string(self.storage.top_order_index)
+        sell_order["buy_amount"] = tostring(buy_amount)
+        sell_order["order_index"] = tostring(self.storage.top_order_index)
         let r = json.dumps(sell_order)
         
-        let event_str = caller_address .. "," ..  tostring(sell_symbol) .. "," .. to_string(sell_amount) .. "," ..  tostring(buy_symbol) .. "," .. to_string(buy_amount)
+        let event_str = caller_address .. "," ..  tostring(sell_symbol) .. "," .. tostring(sell_amount) .. "," ..  tostring(buy_symbol) .. "," .. tostring(buy_amount)
         emit PlaceOrder(event_str)
 
-        fast_map_set(sell_orders, to_string(self.storage.top_order_index), r)
-        self.storage.orders_indexes[#self.storage.orders_indexes + 1] = to_string(self.storage.top_order_index)
+        fast_map_set("sell_orders", tostring(self.storage.top_order_index), r)
+        self.storage.orders_indexes[#self.storage.orders_indexes + 1] = tostring(self.storage.top_order_index)
         self.storage.top_order_index = self.storage.top_order_index + 1
     else
         if (params[1] ~= "BUY") then
             return error("Params Error: invalid params")
         end
 
-        let order_idx = params[2]
-        let found = false
+        let order_idx = tostring(params[2])
+        var found = false
         for k, v in pairs(self.storage.orders_indexes) do
             if v == order_idx then
                 found = true
@@ -185,8 +186,8 @@ function M:on_deposit_asset(json_str: string)
             return error("Params Error: invalid order_idx")
         end
 
-        let r = fast_map_get(sell_orders, order_idx)
-        sell_order = totable(json.loads(r))
+        let rr = fast_map_get("sell_orders", order_idx) or ""
+        sell_order = totable(json.loads(tostring(rr)))
 
         if (sell_order == nil) then
             return error("Params Error: invalid order_idx")
@@ -196,17 +197,17 @@ function M:on_deposit_asset(json_str: string)
             return error("Params Error: can not buy order placed by yourself")
         end
 
-        if (sell_symbol == sell_order["buy_symbol"]) and (to_string(sell_amount) == sell_order["buy_amount"]) then
-            let need_transfer_amount = safemath.tointeger(safemath.div(safemath.mul(safemath.bigint(sell_amount), safemath.bigint(self.storage.fee_rate)), safemath.bigint(10000)))
+        if (sell_symbol == sell_order["buy_symbol"]) and (tostring(sell_amount) == sell_order["buy_amount"]) then
+            let need_transfer_amount = safemath.toint(safemath.div(safemath.mul(safemath.bigint(sell_amount), safemath.bigint(self.storage.fee_rate)), safemath.bigint(10000)))
             let need_transfer_fee = sell_amount - need_transfer_amount
 
             -- transfer to seller
-            let res1 = transfer_from_contract_to_address(sell_order["seller"], sell_symbol, need_transfer_amount)
+            let res1 = transfer_from_contract_to_address(tostring(sell_order["seller"]), sell_symbol, need_transfer_amount)
             if res1 ~= 0 then
-                return error("Transfer asset " .. sell_symbol .. " to " .. sell_order["seller"] .. " error, code: " .. tostring(res1))
+                return error("Transfer asset " .. sell_symbol .. " to " .. tostring(sell_order["seller"]) .. " error, code: " .. tostring(res1))
             end
 
-            let event_str1 = sell_order["seller"] .. "," ..  tostring(sell_order["sell_symbol"]) .. "," .. to_string(sell_order["sell_amount"]) .. "," ..  tostring(sell_symbol) .. "," .. to_string(sell_amount)
+            let event_str1 = tostring(sell_order["seller"]) .. "," ..  tostring(sell_order["sell_symbol"]) .. "," .. tostring(sell_order["sell_amount"]) .. "," ..  tostring(sell_symbol) .. "," .. tostring(sell_amount)
             emit Exchange(event_str1)
 
             if need_transfer_fee > 0 then
@@ -216,17 +217,17 @@ function M:on_deposit_asset(json_str: string)
                     return error("Transfer fee " .. sell_symbol .. " to " .. self.storage.owner .. " error, code: " .. tostring(res_fee))
                 end
 
-                let event_fee = sell_order["seller"] .. "," .. tostring(sell_symbol) .. "," .. to_string(need_transfer_fee)
+                let event_fee = tostring(sell_order["seller"]) .. "," .. tostring(sell_symbol) .. "," .. tostring(need_transfer_fee)
                 emit ExchangeFee(event_fee)
             end
 
             -- transfer to buyer
-            let res2 = transfer_from_contract_to_address(caller_address, sell_order["sell_symbol"], tointeger(sell_order["sell_amount"]))
+            let res2 = transfer_from_contract_to_address(caller_address, tostring(sell_order["sell_symbol"]), tointeger(sell_order["sell_amount"]))
             if res2 ~= 0 then
-                return error("Transfer asset " .. sell_order["sell_symbol"] .. " to " .. caller_address .. " error, code: " .. tostring(res2))
+                return error("Transfer asset " .. tostring(sell_order["sell_symbol"]) .. " to " .. caller_address .. " error, code: " .. tostring(res2))
             end
 
-            let event_str2 = caller_address .. "," ..  tostring(sell_symbol) .. "," .. to_string(sell_amount) .. "," ..  sell_order["sell_symbol"] .. "," .. to_string(sell_order["sell_amount"])
+            let event_str2 = caller_address .. "," ..  tostring(sell_symbol) .. "," .. tostring(sell_amount) .. "," ..  tostring(sell_order["sell_symbol"]) .. "," .. tostring(sell_order["sell_amount"])
             emit Exchange(event_str2)
 
             -- delete order
@@ -236,7 +237,7 @@ function M:on_deposit_asset(json_str: string)
                     break
                 end
             end
-            fast_map_set(sell_orders, order_idx, nil)
+            fast_map_set("sell_orders", order_idx, nil)
         else
             return error("Params Error: your sell_symbol/sell_amount not match with buy_symbol/buy_amount of the order")
         end
@@ -248,8 +249,8 @@ function M:cancel_order(order_idx: string)
     check_market_state(self)
     check_caller_frame_valid(self)
 
-    let r = fast_map_get(sell_orders, order_idx)
-    sell_order = totable(json.loads(r))
+    let r = fast_map_get("sell_orders", order_idx)
+    let sell_order = totable(json.loads(tostring(r)))
 
     if(sell_order == nil) then
         return error("Params Error: invalid order_idx")
@@ -260,12 +261,12 @@ function M:cancel_order(order_idx: string)
     end
 
     -- transfer to seller
-    let res = transfer_from_contract_to_address(sell_order["seller"], sell_order["sell_symbol"], tointeger(sell_order["sell_amount"]))
+    let res = transfer_from_contract_to_address(tostring(sell_order["seller"]), tostring(sell_order["sell_symbol"]), tointeger(sell_order["sell_amount"]))
     if res ~= 0 then
-        return error("Transfer asset " .. sell_order["sell_symbol"] .. " to " .. sell_order["seller"] .. " error, code: " .. tostring(res))
+        return error("Transfer asset " .. tostring(sell_order["sell_symbol"]) .. " to " .. tostring(sell_order["seller"]) .. " error, code: " .. tostring(res))
     end
 
-    let event_str = sell_order["seller"] .. "," ..  tostring(sell_order["sell_symbol"]) .. "," .. to_string(sell_order["sell_amount"])
+    let event_str = tostring(sell_order["seller"]) .. "," ..  tostring(sell_order["sell_symbol"]) .. "," .. tostring(sell_order["sell_amount"])
     emit CancelOrder(event_str)
 
     -- delete order
@@ -275,7 +276,7 @@ function M:cancel_order(order_idx: string)
             break
         end
     end
-    fast_map_set(sell_orders, order_idx, nil)
+    fast_map_set("sell_orders", order_idx, nil)
 end
 
 
@@ -294,7 +295,7 @@ function M:set_fee_rate(fee_rate_str: string)
 
     self.storage.fee_rate = fee_rate
 
-    let event = to_string(fee_rate)
+    let event = tostring(fee_rate)
     emit FeeRateChanged(event)
 end
 
