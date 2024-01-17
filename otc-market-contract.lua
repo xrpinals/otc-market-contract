@@ -115,13 +115,13 @@ function M:on_deposit_asset(json_str: string)
     -- param: BUY,OrderIdx
     let param_str = tostring(json_arg.param)
 
-	if (not sell_amount) or (sell_amount <= 0) then
-		 return error("Params Error: sell_amount must greater than 0")
-	end
+    if (not sell_amount) or (sell_amount <= 0) then
+         return error("Params Error: sell_amount must greater than 0")
+    end
 
-	if (not sell_symbol) or (#sell_symbol < 1) then
-		 return error("Params Error: invalid sell_symbol")
-	end
+    if (not sell_symbol) or (#sell_symbol < 1) then
+         return error("Params Error: invalid sell_symbol")
+    end
 
     if (sell_symbol ~= self.storage.base_symbol) and (sell_symbol ~= self.storage.quote_symbol) then
         return error("Params Error: invalid sell_symbol")
@@ -182,19 +182,19 @@ function M:on_deposit_asset(json_str: string)
         end
 
         if (found == false) then
-			return error("Params Error: invalid order_idx")
-		end
+            return error("Params Error: invalid order_idx")
+        end
 
         let r = fast_map_get(sell_orders, order_idx)
         sell_order = totable(json.loads(r))
 
         if (sell_order == nil) then
-			return error("Params Error: invalid order_idx")
-		end
+            return error("Params Error: invalid order_idx")
+        end
 
         if (sell_order["seller"] == caller_address) then
-			return error("Params Error: can not buy order placed by yourself")
-		end
+            return error("Params Error: can not buy order placed by yourself")
+        end
 
         if (sell_symbol == sell_order["buy_symbol"]) and (to_string(sell_amount) == sell_order["buy_amount"]) then
             let need_transfer_amount = safemath.tointeger(safemath.div(safemath.mul(safemath.bigint(sell_amount), safemath.bigint(self.storage.fee_rate)), safemath.bigint(10000)))
@@ -280,52 +280,52 @@ end
 
 
 function M:set_fee_rate(fee_rate_str: string)
-	check_market_state(self)
+    check_market_state(self)
     check_caller_frame_valid(self)
 
     if self.storage.owner ~= caller_address then
         return error("Permission denied")
     end
 
-	let fee_rate = tointeger(fee_rate_str)
-	if (fee_rate < 0) or (fee_rate > 10000) then
-	    return error("Params Error: invalid fee_rate")
+    let fee_rate = tointeger(fee_rate_str)
+    if (fee_rate < 0) or (fee_rate > 10000) then
+        return error("Params Error: invalid fee_rate")
     end
 
     self.storage.fee_rate = fee_rate
 
     let event = to_string(fee_rate)
-	emit FeeRateChanged(event)
+    emit FeeRateChanged(event)
 end
 
 
 function M:close_market()
-	check_market_state(self)
+    check_market_state(self)
     check_caller_frame_valid(self)
 
     if self.storage.owner ~= caller_address then
         return error("Permission denied")
     end
     
-	self.storage.state = 'C'
+    self.storage.state = 'C'
 
     let event = self.storage.base_symbol .. "-" .. self.storage.quote_symbol
-	emit MarketClosed(event)
+    emit MarketClosed(event)
 end
 
 
 function M:reopen_market()
-	check_market_state_close(self)
+    check_market_state_close(self)
     check_caller_frame_valid(self)
 
     if self.storage.owner ~= caller_address then
         return error("Permission denied")
     end
     
-	self.storage.state = 'N'
+    self.storage.state = 'N'
 
     let event = self.storage.base_symbol .. "-" .. self.storage.quote_symbol
-	emit MarketReopened(event)
+    emit MarketReopened(event)
 end
 
 
