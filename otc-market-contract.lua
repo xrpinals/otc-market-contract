@@ -7,9 +7,8 @@ type Storage = {
     quote: string, 
     state: string,
     owner: string,
-	order_index: int,
-    orders_count: int,
-	sell_orders: Map<string>    -- Key: Order Idx    Value: order info
+    top_order_index: int,
+    orders_indexes: Array<string>
 } 
 
 var M = Contract<Storage>()
@@ -20,8 +19,8 @@ function M:init()
     self.quote_symbol = "BTC"
     self.storage.state = 'N'
     self.storage.owner = caller_address
-    self.storage.order_index = 1
-    self.storage.order_count = 0
+    self.storage.top_order_index = 1
+    self.storage.orders_indexes = []
 end
 
 
@@ -44,7 +43,7 @@ let function check_caller_frame_valid(M: table)
 end
 
 
-offline function M:market_pair(_: string)
+offline function M:market_name(_: string)
     return self.storage.base_symbol .. "-" .. self.storage.quote_symbol
 end
 
@@ -59,19 +58,39 @@ offline function M:owner(_: string)
 end
 
 
-offline function M:order_index(_: string)
-    return self.storage.order_index
+offline function M:top_order_index(_: string)
+    return self.storage.top_order_index
 end
 
 
-offline function M:order_count(_: string)
-    return self.storage.order_count
+offline function M:order_count(param_str: string)
+    return #self.storage.orders_indexes
 end
 
 
+-- from_idx,page_count
 offline function M:sell_orders(_: string)
+    let params = string.split(param_str, ',')
+    if (not params) or (#params ~= 2) then
+        return error("Params Error: invalid params")
+    end
 
-    return sell_orders_str
+    from_idx = tointeger(param[1])
+    page_count = tointeger(param[2])
+    end_idx = from_idx + page_count
+
+    if end_idx >= #self.storage.orders_indexes then
+        end_idx = #self.storage.orders_indexes
+    end
+
+    let orders: Array<string> = []
+    for i = from_idx, end_idx do
+        let order_idx = self.storage.orders_indexes[i]
+        let r = fast_map_get(sell_orders, order_idx)
+        orders[#orders] = r
+    end
+
+    return orders
 end
 
 
@@ -100,12 +119,12 @@ function M:on_deposit_asset(json_str: string)
 
     let params = string.split(param_str, ',')
     if (not params) or (#params ~= 2 and #params ~= 3) then
-        return error("Params Error: invalid params)
+        return error("Params Error: invalid params")
     end
 
     if (#params ~= 3) then
         if (params[1] ~= "SELL" then
-            return error("Params Error: invalid params)
+            return error("Params Error: invalid params")
         end
 
         let buy_symbol = params[2]
@@ -125,23 +144,25 @@ function M:on_deposit_asset(json_str: string)
         sell_order["sell_amount"] = to_string(sell_amount)
         sell_order["buy_symbol"] = buy_symbol
         sell_order["buy_amount"] = to_string(buy_amount)
+        sell_order["order_index"] = to_string(self.storage.top_order_index)
         let r = json.dumps(sell_order)
         
         let event_str = caller_address .. "," ..  tostring(sell_symbol) .. "," .. to_string(sell_amount) .. "," ..  tostring(buy_symbol) .. "," .. to_string(buy_amount)
         emit PlaceOrder(event_str)
 
-        fast_map_set(sell_orders, to_string(self.storage.order_index), r)
-        self.storage.order_index = self.storage.order_index + 1
+        fast_map_set(sell_orders, to_string(self.storage.top_order_index), r)
+        self.storage.orders_indexes[#self.storage.orders_indexes + 1] = to_string(self.storage.top_order_index)
+        self.storage.top_order_index = self.storage.top_order_index + 1
     else
-        if (params[1] ~= "BUY" then
-            return error("Params Error: invalid params)
+        if (params[1] ~= "BUY") then
+            return error("Params Error: invalid params")
         end
 
         let order_idx = params[2]
         let r = fast_map_get(sell_orders, order_idx)
         sell_order = totable(json.loads(r))
 
-        if(sell_order == nil) then
+        if (sell_order == nil) then
 			return error("Params Error: invalid order_idx")
 		end
 
@@ -169,6 +190,12 @@ function M:on_deposit_asset(json_str: string)
             emit Exchange(event_str2)
 
             -- delete order
+            for k, v in pairs(self.storage.orders_indexes) do
+                if v == order_idx then
+                    self.storage.orders_indexes[k] = nil
+                    break
+                end
+            end
             fast_map_set(sell_orders, order_idx, nil)
         else
             return error("Params Error: your sell_symbol/sell_amount not match with buy_symbol/buy_amount of the order")
@@ -202,6 +229,12 @@ function M:cancel_order(order_idx: string)
     emit CancelOrder(event_str)
 
     -- delete order
+    for k, v in pairs(self.storage.orders_indexes) do
+        if v == order_idx then
+            self.storage.orders_indexes[k] = nil
+            break
+        end
+    end
     fast_map_set(sell_orders, order_idx, nil)
 end
 
