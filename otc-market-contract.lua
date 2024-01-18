@@ -17,9 +17,9 @@ var M = Contract<Storage>()
 
 
 function M:init()   
-    self.storage.base_symbol = "XPS"
-    self.storage.quote_symbol = "BTC"
-    self.storage.state = 'N'
+    self.storage.base_symbol = ""
+    self.storage.quote_symbol = ""
+    self.storage.state = 'C'
     self.storage.owner = caller_address
     self.storage.fee_rate = 0
     self.storage.top_order_index = 1
@@ -300,6 +300,43 @@ function M:set_fee_rate(fee_rate_str: string)
 end
 
 
+function M:open_market(param_str: string)
+    check_market_state_close(self)
+    check_caller_frame_valid(self)
+
+    let params = string.split(param_str, ',')
+    if (not params) or (#params ~= 2) then
+        return error("Params Error: invalid params")
+    end
+
+    let base_symbol = tostring(params[1])
+    let quote_symbol = tostring(params[2])
+
+    if (base_symbol == "") or (quote_symbol == "") then
+        return error("Params Error: invalid params")
+    end 
+
+    if (base_symbol == quote_symbol) then
+        return error("Params Error: base_symbol can not be same with quote_symbol")
+    end
+
+    if (self.storage.base_symbol ~= "") or (self.storage.quote_symbol ~= "") then
+        return error("Params Error: open_market can not invoked twice")
+    end 
+
+    if self.storage.owner ~= caller_address then
+        return error("Permission denied")
+    end
+    
+    self.storage.base_symbol = base_symbol
+    self.storage.quote_symbol = quote_symbol
+    self.storage.state = 'N'
+
+    let event = self.storage.base_symbol .. "-" .. self.storage.quote_symbol
+    emit MarketOpened(event)
+end
+
+
 function M:close_market()
     check_market_state(self)
     check_caller_frame_valid(self)
@@ -323,6 +360,10 @@ function M:reopen_market()
         return error("Permission denied")
     end
     
+    if (self.storage.base_symbol == "") or (self.storage.quote_symbol == "") then
+        return error("You must invoke open_market first")
+    end 
+
     self.storage.state = 'N'
 
     let event = self.storage.base_symbol .. "-" .. self.storage.quote_symbol
