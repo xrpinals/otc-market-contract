@@ -1,7 +1,10 @@
 -- N stands for Normal (Market State)
 -- C stands for Closed (Market State)
 
-type MarketState = 'N' | 'C'
+-- type MarketState = 'N' | 'C'
+type Contract<T> = {
+    storage: T
+}
 
 type Storage = {
     base_symbol: string,
@@ -80,7 +83,7 @@ end
 
 
 -- from_idx,page_count
-offline function M:sell_orders(_: string)
+offline function M:sell_orders(param_str: string)
     let params = string.split(param_str, ',')
     if (not params) or (#params ~= 2) then
         return error("Params Error: invalid params")
@@ -96,7 +99,7 @@ offline function M:sell_orders(_: string)
 
     let orders: Array<string> = []
     for i = from_idx, end_idx do
-        let order_idx = self.storage.orders_indexes[i]
+        let order_idx = tostring(self.storage.orders_indexes[i])
         let r = fast_map_get("sell_orders", order_idx)
         orders[#orders + 1] = r
     end
@@ -133,12 +136,13 @@ function M:on_deposit_asset(json_str: string)
         return error("Params Error: invalid params")
     end
 
-    if (#params ~= 3) then
+    var sell_order = {}
+    if (#params == 3) then
         if (params[1] ~= "SELL") then
             return error("Params Error: invalid params")
         end
 
-        let buy_symbol = params[2]
+        let buy_symbol = tostring(params[2])
         let buy_amount = tointeger(params[3])
 
         if (buy_symbol ~= self.storage.base_symbol) and (buy_symbol ~= self.storage.quote_symbol) then
@@ -153,7 +157,7 @@ function M:on_deposit_asset(json_str: string)
             return error("Params Error: buy_amount must greater than 0")
         end
 
-        var sell_order = {}
+        
         sell_order["seller"] = caller_address
         sell_order["sell_symbol"] = sell_symbol
         sell_order["sell_amount"] = tostring(sell_amount)
@@ -165,7 +169,7 @@ function M:on_deposit_asset(json_str: string)
         let event_str = caller_address .. "," ..  tostring(sell_symbol) .. "," .. tostring(sell_amount) .. "," ..  tostring(buy_symbol) .. "," .. tostring(buy_amount)
         emit PlaceOrder(event_str)
 
-        fast_map_set("sell_orders", tostring(self.storage.top_order_index), r)
+        fast_map_set("sell_orders", tostring(self.storage.top_order_index), tostring(r))
         self.storage.orders_indexes[#self.storage.orders_indexes + 1] = tostring(self.storage.top_order_index)
         self.storage.top_order_index = self.storage.top_order_index + 1
     else
@@ -198,8 +202,8 @@ function M:on_deposit_asset(json_str: string)
         end
 
         if (sell_symbol == sell_order["buy_symbol"]) and (tostring(sell_amount) == sell_order["buy_amount"]) then
-            let need_transfer_amount = safemath.toint(safemath.div(safemath.mul(safemath.bigint(sell_amount), safemath.bigint(self.storage.fee_rate)), safemath.bigint(10000)))
-            let need_transfer_fee = sell_amount - need_transfer_amount
+            let need_transfer_fee = safemath.toint(safemath.div(safemath.mul(safemath.bigint(sell_amount), safemath.bigint(self.storage.fee_rate)), safemath.bigint(10000)))
+            let need_transfer_amount = sell_amount - need_transfer_fee
 
             -- transfer to seller
             let res1 = transfer_from_contract_to_address(tostring(sell_order["seller"]), sell_symbol, need_transfer_amount)
