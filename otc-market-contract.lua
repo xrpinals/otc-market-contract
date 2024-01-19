@@ -166,7 +166,7 @@ function M:on_deposit_asset(json_str: string)
         sell_order["order_index"] = tostring(self.storage.top_order_index)
         let r = json.dumps(sell_order)
         
-        let event_str = caller_address .. "," ..  tostring(sell_symbol) .. "," .. tostring(sell_amount) .. "," ..  tostring(buy_symbol) .. "," .. tostring(buy_amount)
+        let event_str = caller_address .. "," .. tostring(self.storage.top_order_index) .. "," ..  tostring(sell_symbol) .. "," .. tostring(sell_amount) .. "," ..  tostring(buy_symbol) .. "," .. tostring(buy_amount)
         emit PlaceOrder(event_str)
 
         fast_map_set("sell_orders", tostring(self.storage.top_order_index), tostring(r))
